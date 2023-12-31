@@ -11,16 +11,12 @@ import Debug.Trace
 data Inst =
   Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
   Branch Code Code | Loop Code Code
-  deriving (Eq, Show)
+  deriving Show
 type Code = [Inst]
 
 data Value = 
   IntValue Integer | BoolValue Bool 
   deriving Show
-
-isIntValue :: Value -> Bool
-isIntValue (IntValue a) = True
-isIntValue (BoolValue a) = False
 
 -- Type to represent the machine's stack
 type Stack = [Value]
@@ -57,35 +53,47 @@ runInst :: (Inst, Stack, State) -> (Stack, State)
 runInst (Push value, sk, st) = ([IntValue value] ++ sk, st)
 runInst (Tru, sk, st) = ([BoolValue True] ++ sk, st)
 runInst (Fals, sk, st) = ([BoolValue False] ++ sk, st)
-runInst (Store _, [], _) =  error "Run-time error: Empty stack in store operation"
+runInst (Store _, [], _) =  error "Run-time error"
 runInst (Store str, sk, st) = (tail sk, sortOn fst ([(str, head sk)] ++ filter (\x -> str /= (fst x)) st))
 runInst (Fetch str, sk, st) = case lookup str st of 
-  Nothing -> error "Run-time error: Variable does not exist"
+  Nothing -> error "Run-time error"
   Just x -> ([x] ++ sk, st)
 runInst (Neg, sk, st) = 
   case sk of 
     BoolValue x : restSk -> ([BoolValue (not x)] ++ restSk, st)
-    _ -> error "Run-time error: Error in neg operation"
+    _ -> error "Run-time error"
 runInst (Branch c1 c2, sk, st) =
   case sk of 
     BoolValue x : restSk -> (a, b) where (_,a,b) = run (if x then c1 else c2, restSk, st)
-    _ -> error "Run-time error: Error in branch operation" 
+    _ -> error "Run-time error" 
 runInst (Loop c1 c2, sk, st) = 
   (a, b) where (_, a, b) = run (c1 ++ [Branch (c2 ++ [Loop c1 c2]) [Noop]], sk, st)
 runInst (Noop, sk, st) = (sk, st)
 runInst (And, sk, st) =
   case sk of
     BoolValue x : BoolValue y : restSk ->  ([BoolValue (x && y)] ++ restSk, st)
-    _ -> error "Run-time error: Error in operation types"
-runInst (op, sk, st) = 
+    _ -> error "Run-time error"
+runInst (Add, sk, st) =
   case sk of
-        IntValue x : IntValue y : restSk -> ([if op == Add then IntValue (x + y) 
-                                              else if op == Sub then IntValue (x - y) 
-                                              else if op == Mult then IntValue (x * y)
-                                              else if op == Equ then BoolValue (x == y)
-                                              else BoolValue (x <= y)] ++ restSk, st)
-        BoolValue x : BoolValue y : restSk -> ([if op == Equ then BoolValue(x == y) else BoolValue(x && y)] ++ restSk, st)
-        _ -> error "Run-time error: Error in operation types" 
+    IntValue x : IntValue y : restSk ->  ([IntValue (x + y)] ++ restSk, st)
+    _ -> error "Run-time error"
+runInst (Sub, sk, st) =
+  case sk of
+    IntValue x : IntValue y : restSk ->  ([IntValue (x - y)] ++ restSk, st)
+    _ -> error "Run-time error"
+runInst (Mult, sk, st) =
+  case sk of
+    IntValue x : IntValue y : restSk ->  ([IntValue (x * y)] ++ restSk, st)
+    _ -> error "Run-time error"
+runInst (Equ, sk, st) =
+  case sk of
+    BoolValue x : BoolValue y : restSk ->  ([BoolValue (x == y)] ++ restSk, st)
+    IntValue x : IntValue y : restSk -> ([BoolValue(x == y)] ++ restSk, st)
+    _ -> error "Run-time error"
+runInst (Le, sk, st) =
+  case sk of
+    IntValue x : IntValue y : restSk ->  ([BoolValue (x <= y)] ++ restSk, st)
+    _ -> error "Run-time error"
 
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
@@ -113,13 +121,13 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- TODO: Define the types Aexp, Bexp, Stm and Program
 
 data Aexp = IntValue' Integer | Variable' String | Add' Aexp Aexp | Sub' Aexp Aexp | Mul' Aexp Aexp
-  deriving (Show)
+  deriving Show
 
 data Bexp = BoolValue' Bool | Eqb' Bexp Bexp | And' Bexp Bexp | Not' Bexp | Le' Aexp Aexp | Eqa' Aexp Aexp
-  deriving (Show)
+  deriving Show
 
 data Stm = While Bexp [Stm] | Attrib String Aexp | If Bexp [Stm] [Stm] | Aexp' Aexp
-  deriving (Show)
+  deriving Show
 
 type Program = [Stm]
 
@@ -222,7 +230,7 @@ parseFactor (OpenTok : restTokens) =
     _ -> Nothing
 parseFactor (IntTok n : restTokens) = Just(IntValue' n, restTokens)
 parseFactor (VarTok v : restTokens) = Just(Variable' v, restTokens)
-parseFactor tokens = error "Factor expected"
+parseFactor tokens = error "Run-time error"
 
 parseBool :: [Token] -> Maybe(Bexp, [Token])
 parseBool (OpenTok : restTokens) =
@@ -239,12 +247,12 @@ parseBool tokens =
     Just(exp1, EqaTok : moreTokens) -> 
       case parseAexp moreTokens of
         Just (exp2, moreTokens2) -> Just (Eqa' exp1 exp2, moreTokens2)
-        _ -> error "Run-time error: Expected second member of comparison (==)"
+        _ -> error "Run-time error"
     Just(exp1, LeTok : moreTokens) -> 
       case parseAexp moreTokens of
         Just (exp2, moreTokens2) -> Just (Le' exp1 exp2, moreTokens2)
-        _ -> error "Run-time error: Expected second member of comparison (<=)"
-    _ -> error "Run-time error: Expected boolean expression"
+        _ -> error "Run-time error"
+    _ -> error "Run-time error"
 
 parseBexp :: [Token] -> Maybe(Bexp, [Token])
 parseBexp tokens = 
@@ -276,11 +284,11 @@ parseStm :: [Token] -> Maybe(Program, [Token])
 parseStm (VarTok v : AttribTok : tokens) =
   case parseAexp tokens of 
     Just (re, moreTokens) -> Just([Attrib v re], moreTokens)
-    _ -> error "Run-time error: Invalid expression for attribution" 
+    _ -> error "Run-time error" 
 parseStm (OpenTok : restTokens) =
   case extendProg ([], restTokens) of
     Just (prog, CloseTok : moreTokens) -> Just (prog, moreTokens)
-    _ -> error "Run-time error: No closing parentheses in program"
+    _ -> error "Run-time error"
 parseStm (IfTok : restTokens) = 
   case parseBexp restTokens of
     Just (b1, ThenTok : afterThen) ->
@@ -288,16 +296,16 @@ parseStm (IfTok : restTokens) =
         Just (e1, ElseTok : afterElse) ->
           case parseStm afterElse of
             Just (e2, moreTokens) -> Just([If b1 e1 e2], moreTokens)
-            _ -> error "Run-time error: Error in else statements"
-        _ -> error "Run-time error: Invalid then-else expression"
-    _ -> error "Run-time error: Invalid if condition"
+            _ -> error "Run-time error"
+        _ -> error "Run-time error"
+    _ -> error "Run-time error"
 parseStm (WhileTok : restTokens) =
   case parseBexp restTokens of
     Just (b1, DoTok : afterDo) ->
       case parseStm afterDo of
         Just (exp, moreTokens) -> Just([While b1 exp], moreTokens)
-        _ -> error "Run-time error: Error in while statement"
-    _ -> error "Run-time error: Error in while condition"
+        _ -> error "Run-time error"
+    _ -> error "Run-time error"
 parseStm ([]) = Just([], [])
 parseStm tokens = Nothing
 
@@ -311,22 +319,25 @@ extendProg (prog, tokens)
       _ -> Just (prog, tokens)
   | otherwise = Just(prog, [])
 
-tParse :: String -> Maybe(Bexp, [Token])
-tParse str = parseBexp (lexer str)
-
 parse :: String -> Program
 parse str = 
   parseProg (lexer str)
 
+-- To help you test your parser
 testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
--- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1 else y := 2" == ("","y=2")
--- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;)" == ("","x=1")
+-- testParser "x := 0 - 2;" == ("","x=-2")
+-- testParser "if (not True and 2 <= 5 = 3 == 4) then x :=1; else y := 2;" == ("","y=2")
+-- testParser "x := 42; if x <= 43 then x := 1; else (x := 33; x := x+1;);" == ("","x=1")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1;" == ("","x=2")
 -- testParser "x := 42; if x <= 43 then x := 1; else x := 33; x := x+1; z := x+x;" == ("","x=2,z=4")
+-- testParser "x := 44; if x <= 43 then x := 1; else (x := 33; x := x+1;); y := x*2;" == ("","x=34,y=68")
+-- testParser "x := 42; if x <= 43 then (x := 33; x := x+1;) else x := 1;" == ("","x=34")
+-- testParser "if (1 == 0+1 = 2+1 == 3) then x := 1; else x := 2;" == ("","x=1")
+-- testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
 -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
 -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
