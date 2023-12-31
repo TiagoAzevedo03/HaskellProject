@@ -24,31 +24,38 @@ type Stack = [Value]
 -- Type to represent the machine's state
 type State = [(String, Value)]
 
+-- Function that returns an empty stack
 createEmptyStack :: Stack
 createEmptyStack = []
 
+-- Function that returns an empty machine’s state
 createEmptyState :: State
 createEmptyState = []
 
+-- Function that converts a stack to a string
 stack2Str :: Stack -> String
 stack2Str [] = ""
 stack2Str [x] = valueToStr x
 stack2Str (x:xs) = valueToStr x ++ "," ++ stack2Str xs
 
+-- Auxiliary function that converts stack values to strings
 valueToStr :: Value -> String
 valueToStr (IntValue intValue) = show intValue
 valueToStr (BoolValue boolValue) = show boolValue
 
+-- Function that converts a state to a string
 state2Str :: State -> String
 state2Str [] = ""
 state2Str [(x, y)] = x ++ "=" ++ valueToStr y
 state2Str ((x, y):xs) = x ++ "=" ++ valueToStr y ++ "," ++ state2Str xs
 
+-- Function that given a list of instructions returns the instructions list empty and the final stack and state
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) =  ([], stack, state)
 run ((i: rc), sk, st) = run(rc, sk1, st1)
                         where (sk1, st1) = runInst (i, sk, st)
 
+-- Auxiliary function that handles a single instruction
 runInst :: (Inst, Stack, State) -> (Stack, State)
 runInst (Push value, sk, st) = ([IntValue value] ++ sk, st)
 runInst (Tru, sk, st) = ([BoolValue True] ++ sk, st)
@@ -95,6 +102,7 @@ runInst (Le, sk, st) =
     IntValue x : IntValue y : restSk ->  ([BoolValue (x <= y)] ++ restSk, st)
     _ -> error "Run-time error"
 
+-- To help you test your assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
   where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
@@ -131,6 +139,7 @@ data Stm = While Bexp [Stm] | Attrib String Aexp | If Bexp [Stm] [Stm] | Aexp' A
 
 type Program = [Stm]
 
+-- Function that compiles arithmetic expressions
 compA :: Aexp -> Code
 compA (IntValue' x) = [Push x]
 compA (Variable' variable) = [Fetch variable]
@@ -138,6 +147,7 @@ compA (Add' a1 a2) = compA a2 ++ compA a1 ++ [Add]
 compA (Sub' a1 a2) = compA a2 ++ compA a1 ++ [Sub]
 compA (Mul' a1 a2) = compA a2 ++ compA a1 ++ [Mult]   
 
+-- Function that compiles boolean expressions
 compB :: Bexp -> Code
 compB (BoolValue' b) | b = [Tru]
                      | otherwise = [Fals]
@@ -147,12 +157,14 @@ compB (Eqa' a1 a2) = compA a2 ++ compA a1 ++ [Equ]
 compB (Le' a1 a2) = compA a2 ++ compA a1 ++ [Le]
 compB (Not' b) = compB b ++ [Neg]
 
+-- Function that compiles statements
 compStm :: Stm -> Code
 compStm (Aexp' x) = compA x
 compStm (Attrib str exp) = compA exp ++ [Store str]
 compStm (If expB s1 s2) = compB expB ++ [Branch (compile s1) (compile s2)]
 compStm (While expB s1) = [Loop (compB expB) (compile s1)]
 
+-- Function that compiles a list of statements to a list of instructions
 compile :: Program -> Code
 compile [] = []
 compile (x : xs) = compStm x ++ compile xs
@@ -162,6 +174,7 @@ data Token = IntTok Integer | VarTok String | AddTok | SubTok | MulTok
   | WhileTok | AttribTok | IfTok | ThenTok | ElseTok | EqbTok | DoTok
   deriving (Show, Eq)
 
+-- Function that transforms a imperative program to a list of tokens
 lexer :: String -> [Token]
 lexer [] = []
 lexer ('+' : restStr) = AddTok : lexer restStr
@@ -197,6 +210,7 @@ lexer str@(chr : _)
         stringToVar = foldl (\acc chr->acc ++ [chr]) ""
 lexer (_ : restString) = error ("Run-time error: Unexpected character")
 
+--Auxiliary functions that parse each type of expression
 parseAexp :: [Token] -> Maybe(Aexp, [Token])
 parseAexp tokens = 
   case parseTerm tokens of 
@@ -319,6 +333,7 @@ extendProg (prog, tokens)
       _ -> Just (prog, tokens)
   | otherwise = Just(prog, [])
 
+-- Function that tranforms an imperative program to a list of statements
 parse :: String -> Program
 parse str = 
   parseProg (lexer str)
